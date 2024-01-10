@@ -60,18 +60,13 @@ class MOOG(Node):
         self.text_output = ""
         
         self.current_actuator_commands = [1024, 1024, 1024, 1024, 1024, 1024]
-
-        self._frequency = 60
-        self._period = 1/self._frequency
         self._initialized = False
-        time.sleep(2)
-        print("Ready to initialize")
 
     def communication_loop(self): # publish current command at 60 Hz
         if len(self._command_buffer) and self._initialized:
             self._prev_command = self._command
             self._command = self._command_buffer.pop(0)
-            print("Received:" +  str(int((self._command >> 64) & 0xFFFF)))
+            # print("Received:" +  str(int((self._command >> 64) & 0xFFFF)))
         self.communicate()
 
     def communicate(self):
@@ -176,12 +171,10 @@ class MOOG(Node):
         if self.state != 'IDLE':
             self.command('ESTOP')
 
-
     def disable(self):
         self.command('DISABLE')
         self.text_output = 'Base Disabled. Please remove & re-apply power to reset.'
         
-
     def park(self):
         # Park
         if self.state == 'ENGAGED' or self.state == 'STANDBY':
@@ -190,14 +183,11 @@ class MOOG(Node):
         else:
             self.text_output = 'PARK valid only in ENGAGED, STANDBY states'
 
-
     def low_limit_enable(self):
         self.command('LOW LIMIT ENABLE')
 
-
     def low_limit_disable(self):
         self.command('LOW LIMIT DISABLE')
-
 
     def engage(self):
         if self.state == 'IDLE':
@@ -221,13 +211,11 @@ class MOOG(Node):
         else:
             self.text_output = 'START valid only in the IDLE state'
 
-
     def length_mode(self):
         if self.state == 'IDLE' or self.state == 'POWERUP':
             self.command('LENGTH MODE', [1024, 1024, 1024, 1024, 1024, 1024])
         else:
             self.text_output = 'LENGTH MODE valid only in IDLE, POWERUP states'
-
 
     def dof_mode(self):
         if self.state == 'IDLE' or self.state == 'POWERUP':
@@ -235,12 +223,10 @@ class MOOG(Node):
         else:
             self.text_output = 'LENGTH MODE valid only in IDLE, POWERUP states'
 
-
     def reset(self):
         # if self.state == 'FAULT2' or self.state == 'FAULT3' or self.state == 'INHIBITED':
         self.command('RESET')
         print("yep")
-
 
     def inhibit(self):
         if self.state == 'POWERUP' or self.state == 'IDLE':
@@ -249,7 +235,6 @@ class MOOG(Node):
         else:
             self.text_output = 'INHIBIT valid only in IDLE, POWERUP states'
 
-    
     def command_dof(self, roll=16383, pitch=16383, heave=29000, surge=16383, yaw=16383, lateral=16383, buffer=False):
         if self.mode:
             self.command('NEW POSITION', [roll, pitch, heave, surge, yaw, lateral], buffer=buffer)
@@ -273,7 +258,6 @@ class MOOG(Node):
         else:
             self.text_output = 'Command rejected: Base currently in DOF Mode'
 
-
     def set_command(self, new_command):
         # TODO: Lock
         self._prev_command = self._command
@@ -295,17 +279,23 @@ class MOOG(Node):
 
     
 
-    
+# If launched as main, initialize the platform, subscribe to topic for commands, publish current state, and 
 def main(args=None):
     rclpy.init(args=args)
     moog = MOOG()
-
+    
+    # Initialize platform
     moog.initialize_platform()
 
     # ROS Rate 60 Hz
     timer_period = 1/60
     timer = moog.create_timer(timer_period, moog.communication_loop)
 
+    # Subscribe to topic "moog_cmds" for commands
+    moog.create_subscription(String, 'moog_cmds', moog.command_callback, 10)
+
+    # Publish current state to topic "moog_state"
+    moog_state_pub = moog.create_publisher(String, 'moog_state', 10)
 
     # Destroy and shutdown
     moog.destroy_node()
